@@ -220,9 +220,27 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             logger.debug(f"Length of an entry in the data loader: {len(x)}")
         logger.debug("Ending that debug.")
 
+        def epoch_end_callback(metrics, epoch):
+            samples = list()
+            for meter, value in metrics.meters.items():
+                if 'loss' in meter:
+                    legend = 'val' if 'val' in meter else 'train'
+                    figure = meter.split('_')[-1]
+                    samples.append(dl.PlotSample(figure=figure, legend=legend, x=epoch, y=value))
+            self.model_entity.metrics.create(samples, dataset_id=self.model_entity.dataset_id)
+
         for epoch in range(num_epochs):
             logger.debug(f"Training epoch {epoch}")
-            train_one_epoch(self.model, optimizer, data_loader, device=device, epoch=epoch, print_freq=10)
+            epoch_metrics = train_one_epoch(
+                self.model,
+                optimizer,
+                data_loader,
+                device=device,
+                val_data_loader=data_loader_test,
+                epoch=epoch,
+                print_freq=10
+                )
+            epoch_end_callback(epoch_metrics, epoch)
             lr_scheduler.step()
             evaluate(self.model, data_loader_test, device=device)
         logger.info("Training finished successfully")

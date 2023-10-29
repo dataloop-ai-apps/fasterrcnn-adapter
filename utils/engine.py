@@ -9,10 +9,12 @@ from coco_eval import CocoEvaluator
 from coco_utils import get_coco_api_from_dataset
 
 
-def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, scaler=None):
+def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, val_data_loader=None, scaler=None):
     model.train()
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
+    if val_data_loader:
+        metric_logger.add_meter("val_loss", utils.SmoothedValue(window_size=1, fmt="{value:.3f}"))
     header = f"Epoch: [{epoch}]"
 
     lr_scheduler = None
@@ -22,7 +24,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, sc
 
         lr_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer, start_factor=warmup_factor, total_iters=warmup_iters
-        )
+            )
 
     for images, targets in metric_logger.log_every(data_loader, print_freq, header):
         images = list(image.to(device) for image in images)
@@ -55,7 +57,21 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, sc
         if lr_scheduler is not None:
             lr_scheduler.step()
 
+        if val_data_loader:
+            model.eval()
+            with torch.no_grad():
+                for val_images, val_targets in\
+                        metric_logger.log_every(val_data_loader, print_freq, f"Val Epoch [{epoch}]"):
+                    val_images = list(image.to(device) for image in val_images)
+                    val_targets = [{k: v.to(device) if isinstance(v, torch.Tensor) \
+                        else v for k, v in t.items()} for t in val_targets]
+                    with torch.cuda.amp.autocast(enabled=scaler is not None):
+                        val_loss_dict = model(val_images, val_targets)
+                    val_loss_dict_reduced = utils.reduce_dict(val_loss_dict)
+                    val_losses_reduced = sum(loss for loss in val_loss_dict_reduced.values())
+
         metric_logger.update(loss=losses_reduced, **loss_dict_reduced)
+        metric_logger.update(val_loss=val_losses_reduced, **val_loss_dict_reduced)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
 
     return metric_logger
