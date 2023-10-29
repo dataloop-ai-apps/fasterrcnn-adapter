@@ -1,4 +1,5 @@
 import os
+import argparse
 import logging
 import cv2
 import torch
@@ -51,7 +52,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
 
     @staticmethod
     def dl_collate(batch):
-        ims = torch.Tensor([torch.transpose(b['image'], 2, 1) for b in batch])
+        ims = torch.Tensor([torch.transpose(b['image'].float(), 2, 1) for b in batch])
         tgs = list()
         for b in batch:
             masks = list()
@@ -176,7 +177,6 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             if train:
                 transforms.append(T.RandomHorizontalFlip(0.5))
             transforms.append(T.Resize(input_size))
-            transforms.append(T.ToDtype(torch.float))
             return T.Compose(transforms)
 
         logger.debug("Trainset generator created")
@@ -326,10 +326,19 @@ def model_creation(package: dl.Package, project: dl.Project, dataset: dl.Dataset
     return model
 
 
+def parse_args():
+    arg_parser= argparse.ArgumentParser()
+    arg_parser.add_argument("--env", "-e", type=str, help="Environment (prod or rc)")
+    arg_parser.add_argument("--project", "-p", type=str, help="Project name")
+    arg_parser.add_argument("--dataset", "-d", type=str, help="Dataset name")
+    return arg_parser.parse_args()
+
+
 if __name__ == "__main__":
-    env = ''
-    project_name = ''
-    dataset_name = ''
+    args = parse_args()
+    env = args.env
+    project_name = args.project
+    dataset_name = args.dataset
     dl.setenv(env)
     project = dl.projects.get(project_name)
     package = package_creation(project)
