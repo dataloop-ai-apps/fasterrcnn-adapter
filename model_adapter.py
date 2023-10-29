@@ -7,10 +7,10 @@ import numpy as np
 import dtlpy as dl
 
 from PIL import Image
+from glob import glob
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 from dtlpy.utilities.dataset_generators.dataset_generator_torch import DatasetGeneratorTorch
-from dtlpy.utilities.dataset_generators.dataset_generator import collate_torch
 from utils.engine import train_one_epoch, evaluate
 
 logger = logging.getLogger('FasterRCNNAdapter')
@@ -83,6 +83,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         model_filename = os.path.join(local_path, self.configuration.get('model_filename', 'weights/best.pt'))
 
         self.model = self.get_model_instance_segmentation(num_classes)
+        os.makedirs(local_path, exist_ok=True)
         logger.debug(f"Current content of local_path: {os.listdir(local_path)}")
         logger.debug(f"Looking for weights at {model_filename}")
         if os.path.exists(model_filename):
@@ -98,10 +99,12 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         self.configuration.update({'model_filename': 'weights/best.pt'})
 
     def prepare_item_func(self, item: dl.entities.Item):
+        img_size = self.configuration.get("input_size", 256)
         buffer = item.download(save_locally=False)
         image = np.asarray(Image.open(buffer))
         if image.shape[0] != 3:
             image = np.transpose(image, (2, 0, 1))
+            image = np.resize(image, (3, img_size, img_size))
         return image
 
     def predict(self, batch, **kwargs):
@@ -146,6 +149,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
     def train(self, data_path, output_path, **kwargs):
         # Reading configs:
         num_epochs = self.configuration.get("num_epochs", 10)
+        input_size = self.configuration.get("input_size", 256)
         train_batch_size = self.configuration.get("train_batch_size", 12)
         val_batch_size = self.configuration.get("val_batch_size", 1)
         dataloader_num_workers = self.configuration.get("num_workers", 1)
@@ -161,8 +165,10 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         logger.info(f"Using device: {device}")
 
-        model.train()
+        os.makedirs(output_path, exist_ok=True)
+        os.makedirs(os.path.join(output_path, 'weights'), exist_ok=True)
         logger.info("Model set to train mode.")
+
 
         logger.debug("Trainset generator created")
         train_dataset = DatasetGeneratorTorch(
@@ -189,7 +195,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             train_batch_size,
             shuffle=True,
             num_workers=dataloader_num_workers,
-            collate_fn=collate_torch
+            collate_fn=self.dl_collate
             )
         logger.debug("Train data loader created")
         data_loader_test = torch.utils.data.DataLoader(
@@ -197,7 +203,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             val_batch_size,
             shuffle=True,
             num_workers=dataloader_num_workers,
-            collate_fn=collate_torch
+            collate_fn=self.dl_collate
             )
         logger.debug("Val data loader created")
         params = [p for p in self.model.parameters() if p.requires_grad]
@@ -244,6 +250,18 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             lr_scheduler.step()
             evaluate(self.model, data_loader_test, device=device)
         logger.info("Training finished successfully")
+
+    def convert_from_dtlpy(self, data_path, **kwargs):
+        input_size = self.configuration.get("input_size", 256)
+        subsets = list(self.model_entity.metadata['system']['subsets'].keys())
+        subpaths = [self.model_entity.metadata['system']['subsets'][subset]['$and']['dir'] for subset in subsets]
+
+        for subset, subpath in zip(subsets, subpaths):
+            img_paths = glob(os.path.join(data_path, subset, 'items', subpath[1:], '*'))
+            for img_path in img_paths:
+                img = Image.open(img_path)
+                img.resize((input_size, input_size))
+                img.save(img_path)
 
 
 def package_creation(project):
@@ -297,9 +315,9 @@ def model_creation(package: dl.Package, project: dl.Project, dataset: dl.Dataset
 
 
 if __name__ == "__main__":
-    env = '<env>'
-    project_name = '<project-name>'
-    dataset_name = '<dataset-name>'
+    env = ''
+    project_name = ''
+    dataset_name = ''
     dl.setenv(env)
     project = dl.projects.get(project_name)
     package = package_creation(project)

@@ -342,4 +342,5 @@ pyrightconfig.json
 
 scripts/
 data/
+tmp/
 .dataloop
