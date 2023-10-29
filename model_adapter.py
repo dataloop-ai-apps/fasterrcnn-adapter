@@ -10,6 +10,7 @@ from PIL import Image
 from glob import glob
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+from torchvision import transforms as T
 from dtlpy.utilities.dataset_generators.dataset_generator_torch import DatasetGeneratorTorch
 from utils.engine import train_one_epoch, evaluate
 
@@ -50,7 +51,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
 
     @staticmethod
     def dl_collate(batch):
-        ims = torch.Tensor(np.array([np.moveaxis(b['image'], -1, 0) for b in batch]))
+        ims = torch.Tensor([torch.transpose(b['image'], 2, 1) for b in batch])
         tgs = list()
         for b in batch:
             masks = list()
@@ -169,6 +170,15 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         os.makedirs(os.path.join(output_path, 'weights'), exist_ok=True)
         logger.info("Model set to train mode.")
 
+        def get_transform(train=True):
+            transforms = list()
+            transforms.append(T.ToTensor())
+            if train:
+                transforms.append(T.RandomHorizontalFlip(0.5))
+            transforms.append(T.Resize(input_size))
+            transforms.append(T.ToDtype(torch.float))
+            return T.Compose(transforms)
+
         logger.debug("Trainset generator created")
         train_dataset = DatasetGeneratorTorch(
             data_path=os.path.join(data_path, 'train'),
@@ -178,6 +188,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             label_to_id_map=label_to_id_map,
             overwrite=False,
             annotation_type=dl.AnnotationType.POLYGON,
+            transforms=get_transform()
             )
         val_dataset = DatasetGeneratorTorch(
             data_path=os.path.join(data_path, 'validation'),
@@ -187,6 +198,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             label_to_id_map=label_to_id_map,
             overwrite=False,
             annotation_type=dl.AnnotationType.POLYGON,
+            transforms=get_transform(False)
             )
 
         data_loader = torch.utils.data.DataLoader(
