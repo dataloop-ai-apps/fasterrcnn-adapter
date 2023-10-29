@@ -52,7 +52,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
 
     @staticmethod
     def dl_collate(batch):
-        ims = torch.Tensor([torch.transpose(b['image'].float(), 2, 1) for b in batch])
+        ims = torch.stack([torch.transpose(b['image'].float(), 2, 1) for b in batch])
         tgs = list()
         for b in batch:
             masks = list()
