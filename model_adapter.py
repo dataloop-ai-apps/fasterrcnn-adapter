@@ -254,7 +254,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
     def convert_from_dtlpy(self, data_path, **kwargs):
         input_size = self.configuration.get("input_size", 256)
         subsets = list(self.model_entity.metadata['system']['subsets'].keys())
-        subpaths = [self.model_entity.metadata['system']['subsets'][subset]['$and']['dir'] for subset in subsets]
+        subpaths = [self.model_entity.metadata['system']['subsets'][subset]['filter']['$and']['dir'] for subset in subsets]
 
         for subset, subpath in zip(subsets, subpaths):
             img_paths = glob(os.path.join(data_path, subset, 'items', subpath[1:], '*'))
