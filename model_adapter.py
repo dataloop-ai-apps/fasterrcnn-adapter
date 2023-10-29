@@ -169,7 +169,6 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         os.makedirs(os.path.join(output_path, 'weights'), exist_ok=True)
         logger.info("Model set to train mode.")
 
-
         logger.debug("Trainset generator created")
         train_dataset = DatasetGeneratorTorch(
             data_path=os.path.join(data_path, 'train'),
@@ -254,10 +253,11 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
     def convert_from_dtlpy(self, data_path, **kwargs):
         input_size = self.configuration.get("input_size", 256)
         subsets = list(self.model_entity.metadata['system']['subsets'].keys())
-        subpaths = [self.model_entity.metadata['system']['subsets'][subset]['filter']['$and']['dir'] for subset in subsets]
+        subpaths = [self.model_entity.metadata['system']['subsets'][subset]['filter']['$and'][0]['dir'][1:] \
+                    for subset in subsets]
 
         for subset, subpath in zip(subsets, subpaths):
-            img_paths = glob(os.path.join(data_path, subset, 'items', subpath[1:], '*'))
+            img_paths = glob(os.path.join(data_path, subset, 'items', subpath, '*'))
             for img_path in img_paths:
                 img = Image.open(img_path)
                 img.resize((input_size, input_size))
