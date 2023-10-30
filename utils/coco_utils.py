@@ -136,7 +136,7 @@ def convert_to_coco_api(ds):
             img_dict["width"] = img.shape[-1]
             dataset["images"].append(img_dict)
             # prepare box
-            from coco_eval import convert_to_xywh
+            from utils.coco_eval import convert_to_xywh
             bboxes = convert_to_xywh(targets["boxes"].clone()).tolist()
             labels = targets["labels"].tolist()
             areas = targets["area"]

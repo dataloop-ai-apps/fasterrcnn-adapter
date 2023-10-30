@@ -57,7 +57,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         for b in batch:
             masks = list()
             for seg in b['segment']:
-                mask = np.zeros(shape=b['image'].shape[:2])
+                mask = np.zeros(shape=b['image'].shape[1:])
                 mask = cv2.drawContours(
                     image=mask,
                     contours=[np.asarray(seg).astype('int')],
@@ -77,6 +77,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
                  'masks': masks,
                  'image_id': b['item_id']}
                 )
+
         return ims, tgs
 
     def load(self, local_path, **kwargs):
@@ -86,8 +87,6 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
 
         self.model = self.get_model_instance_segmentation(num_classes)
         os.makedirs(local_path, exist_ok=True)
-        logger.debug(f"Current content of local_path: {os.listdir(local_path)}")
-        logger.debug(f"Looking for weights at {model_filename}")
         if os.path.exists(model_filename):
             logger.info("Loading saved weights")
             self.model.load_state_dict(torch.load(model_filename, map_location=device))
@@ -176,7 +175,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             transforms.append(T.ToTensor())
             if train:
                 transforms.append(T.RandomHorizontalFlip(0.5))
-            transforms.append(T.Resize(input_size))
+            transforms.append(T.Resize((input_size, input_size)))
             return T.Compose(transforms)
 
         logger.debug("Trainset generator created")
@@ -232,18 +231,43 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             )
         logger.debug("Starting training")
 
-        for x in data_loader:
-            logger.debug(f"Content of an entry in the data loader: {x}")
-            logger.debug(f"Length of an entry in the data loader: {len(x)}")
-        logger.debug("Ending that debug.")
-
         def epoch_end_callback(metrics, epoch):
             samples = list()
             for meter, value in metrics.meters.items():
                 if 'loss' in meter:
                     legend = 'val' if 'val' in meter else 'train'
                     figure = meter.split('_')[-1]
-                    samples.append(dl.PlotSample(figure=figure, legend=legend, x=epoch, y=value))
+                    samples.append(dl.PlotSample(figure=figure, legend=legend, x=epoch, y=value.value))
+            self.model_entity.metrics.create(samples, dataset_id=self.model_entity.dataset_id)
+
+        def eval_results_callback(metrics, epoch):
+            samples = list()
+            for iou_metric, coco_eval in metrics.coco_eval.items():
+                stats = coco_eval.stats
+                for i, stat in enumerate(stats):
+                    metric_name = "AP" if i <= 5 else "AR"
+                    if i == 1:
+                        iou_thresh = "@IoU=0.5"
+                    elif i == 2:
+                        iou_thresh = "@IoU=0.75"
+                    else:
+                        iou_thresh = "@IoU=0.5:0.95"
+                    if i in [3, 9]:
+                        area = "|area=small"
+                    elif i in [4, 10]:
+                        area = "|area=medium"
+                    elif i in [5, 11]:
+                        area = "|area=large"
+                    else:
+                        area = "|area=all"
+                    if i == 6:
+                        max_dets = "|max_dets=1"
+                    elif i == 7:
+                        max_dets = "|max_dets=10"
+                    else:
+                        max_dets = "|max_dets=100"
+                    figure = iou_metric + metric_name + iou_thresh + area + max_dets
+                    samples.append(dl.PlotSample(figure=figure, legend="val", x=epoch, y=stat))
             self.model_entity.metrics.create(samples, dataset_id=self.model_entity.dataset_id)
 
         for epoch in range(num_epochs):
@@ -259,7 +283,8 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
                 )
             epoch_end_callback(epoch_metrics, epoch)
             lr_scheduler.step()
-            evaluate(self.model, data_loader_test, device=device)
+            eval_results = evaluate(self.model, data_loader_test, device=device)
+            eval_results_callback(eval_results, epoch)
         logger.info("Training finished successfully")
 
     def convert_from_dtlpy(self, data_path, **kwargs):
@@ -343,8 +368,8 @@ if __name__ == "__main__":
     project = dl.projects.get(project_name)
     package = package_creation(project)
     dataset = project.datasets.get(dataset_name)
-    model = model_creation(package, project, dataset)
-    print(
-        f"Model {model.name} created with dataset {dataset.name}"
-        f"with package {package.name} in project {project.name}!"
-        )
+    # model = model_creation(package, project, dataset)
+    # print(
+    #     f"Model {model.name} created with dataset {dataset.name}"
+    #     f"with package {package.name} in project {project.name}!"
+    #     )
