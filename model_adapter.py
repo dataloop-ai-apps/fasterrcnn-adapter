@@ -186,6 +186,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             id_to_label_map=id_to_label_map,
             label_to_id_map=label_to_id_map,
             overwrite=False,
+            to_mask=False,
             annotation_type=dl.AnnotationType.POLYGON,
             transforms=get_transform()
             )
@@ -196,6 +197,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             id_to_label_map=id_to_label_map,
             label_to_id_map=label_to_id_map,
             overwrite=False,
+            to_mask=False,
             annotation_type=dl.AnnotationType.POLYGON,
             transforms=get_transform(False)
             )
@@ -236,7 +238,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             for meter, value in metrics.meters.items():
                 if 'loss' in meter:
                     legend = 'val' if 'val' in meter else 'train'
-                    figure = meter.split('_')[-1]
+                    figure = meter.split('val_')[-1] if legend == 'val' else meter
                     samples.append(dl.PlotSample(figure=figure, legend=legend, x=epoch, y=value.value))
             self.model_entity.metrics.create(samples, dataset_id=self.model_entity.dataset_id)
 
@@ -368,8 +370,8 @@ if __name__ == "__main__":
     project = dl.projects.get(project_name)
     package = package_creation(project)
     dataset = project.datasets.get(dataset_name)
-    # model = model_creation(package, project, dataset)
-    # print(
-    #     f"Model {model.name} created with dataset {dataset.name}"
-    #     f"with package {package.name} in project {project.name}!"
-    #     )
+    model = model_creation(package, project, dataset)
+    print(
+        f"Model {model.name} created with dataset {dataset.name}"
+        f"with package {package.name} in project {project.name}!"
+        )
