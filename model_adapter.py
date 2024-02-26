@@ -279,7 +279,6 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
                 optimizer,
                 data_loader,
                 device=device,
-                val_data_loader=data_loader_test,
                 epoch=epoch,
                 print_freq=10
                 )
@@ -292,8 +291,10 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
     def convert_from_dtlpy(self, data_path, **kwargs):
         input_size = self.configuration.get("input_size", 256)
         subsets = list(self.model_entity.metadata['system']['subsets'].keys())
-        subpaths = [self.model_entity.metadata['system']['subsets'][subset]['filter']['$and'][0]['dir'][1:] \
-                    for subset in subsets]
+        subpaths = [
+                [s['dir'] for s in self.model_entity.metadata['system']['subsets'][subset]['filter']['$and'] if
+                 s.get('dir') is not None][0][1:] for subset in subsets
+            ]
 
         for subset, subpath in zip(subsets, subpaths):
             img_paths = glob(os.path.join(data_path, subset, 'items', subpath, '*'))
