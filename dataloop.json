@@ -57,7 +57,7 @@
       {
         "name": "fasterrcnn-module",
         "entryPoint": "model_adapter.py",
-        "className": "Adapter",
+        "className": "FasterRCNNAdapter",
         "computeConfig": "fasterrcnn-deploy",
         "description": "FasterRCNN Segmentation Module",
         "initInputs": [
