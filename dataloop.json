@@ -2,7 +2,7 @@
   "name": "fasterrcnn",
   "displayName": "FasterRCNN",
   "version": "0.1.3",
-  "scope": "public",
+  "scope": "project",
   "description": "FasterRCNN application for object detection",
   "attributes": {
     "Provider": "PyTorch",
@@ -170,7 +170,7 @@
       {
         "name": "fasterrcnn",
         "moduleName": "fasterrcn-module",
-        "scope": "public",
+        "scope": "project",
         "status": "pre-trained",
         "configuration": {
           "weights_filename": "weights/best.pth",
