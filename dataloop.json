@@ -138,7 +138,7 @@
               }
             ],
             "output": [],
-            "displayName": "Predict Items",
+            "displayName": "Predict Dataset",
             "displayIcon": "",
             "description": "Function to run FasterRCNN inference on a dataset"
           },
