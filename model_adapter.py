@@ -90,6 +90,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         if os.path.exists(model_filename):
             logger.info("Loading saved weights")
             self.model.load_state_dict(torch.load(model_filename, map_location=device))
+            self.model.to(device)
         else:
             logger.info("No weights file found. Loading pre-trained weights.")
 
