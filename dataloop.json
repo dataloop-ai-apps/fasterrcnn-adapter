@@ -49,7 +49,8 @@
             "maxReplicas": 2,
             "queueLength": 100
           },
-          "preemptible": false
+          "preemptible": false,
+          "executionTimeout": 36000000
         }
       }
     ],
