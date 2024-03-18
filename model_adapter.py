@@ -153,7 +153,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         input_size = self.configuration.get("input_size", 256)
         train_batch_size = self.configuration.get("train_batch_size", 12)
         val_batch_size = self.configuration.get("val_batch_size", 1)
-        dataloader_num_workers = self.configuration.get("num_workers", 1)
+        dataloader_num_workers = self.configuration.get("num_workers", 0)
         optim_learning_rate = self.configuration.get('learning_rate', 0.005)
         optim_momentum = self.configuration.get('momentum', 0.9)
         optim_weight_decay = self.configuration.get('weight_decay', 0.0005)
