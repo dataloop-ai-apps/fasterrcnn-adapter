@@ -13,7 +13,6 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, sc
     model.train()
     metric_logger = frcnnutils.MetricLogger(delimiter="  ")
     metric_logger.add_meter("lr", frcnnutils.SmoothedValue(window_size=1, fmt="{value:.6f}"))
-    metric_logger.add_meter("val_loss", frcnnutils.SmoothedValue(window_size=1, fmt="{value:.3f}"))
     header = f"Epoch: [{epoch}]"
 
     lr_scheduler = None
@@ -25,7 +24,7 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, print_freq, sc
             optimizer, start_factor=warmup_factor, total_iters=warmup_iters
             )
 
-    for images, targets in data_loader:
+    for images, targets in metric_logger.log_every(data_loader, print_freq, header):
         images = list(image.to(device) for image in images)
         targets = [{k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in t.items()} for t in targets]
         with torch.cuda.amp.autocast(enabled=scaler is not None):
