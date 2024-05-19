@@ -124,7 +124,7 @@
               {
                 "type": "Dataset",
                 "name": "dataset",
-                "description": ""
+                "description": "Dataloop Dataset Entity"
               },
               {
                 "type": "Json",
