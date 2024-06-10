@@ -75,6 +75,11 @@
                 "type": "Dataset",
                 "name": "dataset",
                 "description": "Dataloop Dataset Entity"
+              },
+              {
+                "type": "Json",
+                "name": "filters",
+                "description": "Dataloop DQL Filter"
               }
             ],
             "output": [
