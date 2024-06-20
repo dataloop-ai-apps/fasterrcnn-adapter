@@ -1,5 +1,5 @@
 {
-  "name": "fasterrcnn",
+  "name": "fasterrcnn-adapter",
   "displayName": "FasterRCNN",
   "version": "0.1.15",
   "scope": "public",
