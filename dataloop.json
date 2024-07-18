@@ -6,6 +6,7 @@
   "description": "FasterRCNN application for object detection",
   "attributes": {
     "Provider": "PyTorch",
+    "Deployed By": "Dataloop",
     "License": "BSD-3.0",
     "Category": "Model",
     "Computer Vision": "Semantic Segmentation",
