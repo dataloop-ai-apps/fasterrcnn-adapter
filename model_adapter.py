@@ -1,18 +1,19 @@
 import os
-import argparse
 import logging
+from pathlib import Path
+
 import cv2
+import numpy as np
 import torch
 import torchvision
-import numpy as np
-import dtlpy as dl
-
 from PIL import Image
-from glob import glob
+from torchvision import transforms as T
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from torchvision import transforms as T
+
+import dtlpy as dl
 from dtlpy.utilities.dataset_generators.dataset_generator_torch import DatasetGeneratorTorch
+
 from utils.engine import train_one_epoch, evaluate
 
 logger = logging.getLogger('FasterRCNNAdapter')
@@ -290,16 +291,38 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         logger.info("Training finished successfully")
 
     def convert_from_dtlpy(self, data_path, **kwargs):
+        """Convert and resize images from Dataloop format.
+        
+        This method finds all image files in the dataset subsets and resizes them
+        to the configured input size for consistent model input.
+        
+        Args:
+            data_path (str): Path to the directory containing the dataset
+            **kwargs: Additional keyword arguments (unused)
+        """
         input_size = self.configuration.get("input_size", 256)
         subsets = list(self.model_entity.metadata['system']['subsets'].keys())
-        subpaths = [
-                [s['dir'] for s in self.model_entity.metadata['system']['subsets'][subset]['filter']['$and'] if
-                 s.get('dir') is not None][0][1:] for subset in subsets
-            ]
-
-        for subset, subpath in zip(subsets, subpaths):
-            img_paths = glob(os.path.join(data_path, subset, 'items', subpath, '*'))
+        
+        logger.info(f"Converting and resizing images from Dataloop format at {data_path}")
+        logger.info(f"Target image size: {input_size}x{input_size}")
+        
+        for subset in subsets:
+            logger.info(f"Processing subset: {subset}")
+            parent_dir = os.path.join(data_path, subset, 'items')
+                
+            # Find all image files recursively in the subset directory
+            img_paths = [f for f in Path(parent_dir).rglob('*') if f.is_file() and not f.name.endswith('.json')]
+            
+            if len(img_paths) == 0:
+                logger.warning(f"No image files found in {parent_dir}")
+                continue
+                
+            logger.info(f"Found {len(img_paths)} image files in subset {subset}")
+            
             for img_path in img_paths:
                 img = Image.open(img_path)
-                img.resize((input_size, input_size))
+                img = img.resize((input_size, input_size))
                 img.save(img_path)
+                    
+        logger.info("Image conversion and resizing completed")
+
