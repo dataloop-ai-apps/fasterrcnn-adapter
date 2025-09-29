@@ -161,6 +161,7 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         optim_weight_decay = self.configuration.get('weight_decay', 0.0005)
         scheduler_step_size = self.configuration.get('step_size', 3)
         scheduler_gamma = self.configuration.get('gamma', 0.1)
+        ignore_empty_items = self.configuration.get('ignore_empty_items', False)
         label_to_id_map = self.model_entity.label_to_id_map
         id_to_label_map = self.model_entity.id_to_label_map
         train_filter = self.model_entity.metadata['system']['subsets']['train']['filter']
@@ -203,6 +204,10 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
             annotation_type=dl.AnnotationType.POLYGON,
             transforms=get_transform(False)
             )
+
+        # we want to train on all images, not just the ones with annotations
+        train_dataset.ignore_empty = ignore_empty_items
+        val_dataset.ignore_empty = ignore_empty_items
 
         data_loader = torch.utils.data.DataLoader(
             train_dataset,
@@ -291,38 +296,8 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         logger.info("Training finished successfully")
 
     def convert_from_dtlpy(self, data_path, **kwargs):
-        """Convert and resize images from Dataloop format.
-        
-        This method finds all image files in the dataset subsets and resizes them
-        to the configured input size for consistent model input.
-        
-        Args:
-            data_path (str): Path to the directory containing the dataset
-            **kwargs: Additional keyword arguments (unused)
-        """
-        input_size = self.configuration.get("input_size", 256)
-        subsets = list(self.model_entity.metadata['system']['subsets'].keys())
-        
-        logger.info(f"Converting and resizing images from Dataloop format at {data_path}")
-        logger.info(f"Target image size: {input_size}x{input_size}")
-        
-        for subset in subsets:
-            logger.info(f"Processing subset: {subset}")
-            parent_dir = os.path.join(data_path, subset, 'items')
-                
-            # Find all image files recursively in the subset directory
-            img_paths = [f for f in Path(parent_dir).rglob('*') if f.is_file() and not f.name.endswith('.json')]
-            
-            if len(img_paths) == 0:
-                logger.warning(f"No image files found in {parent_dir}")
-                continue
-                
-            logger.info(f"Found {len(img_paths)} image files in subset {subset}")
-            
-            for img_path in img_paths:
-                img = Image.open(img_path)
-                img = img.resize((input_size, input_size))
-                img.save(img_path)
-                    
-        logger.info("Image conversion and resizing completed")
+        # image resizing is done in transform, no need to convert from dtlpy
+        logger.info("skipping convert_from_dtlpy")
+
+
 
