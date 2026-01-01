@@ -1,4 +1,4 @@
-FROM dataloopai/dtlpy-agent:gpu.cuda.11.8.py3.10.pytorch2
+FROM hub.dataloop.ai/dtlpy-runner-images/gpu:python3.11_cuda11.8_pytorch2
 
 USER root
 
