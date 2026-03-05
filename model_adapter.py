@@ -83,17 +83,17 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
 
     def load(self, local_path, **kwargs):
         num_classes = len(self.model_entity.labels)
-        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         model_filename = os.path.join(local_path, self.configuration.get('model_filename', 'weights/best.pt'))
 
         self.model = self.get_model_instance_segmentation(num_classes)
         os.makedirs(local_path, exist_ok=True)
         if os.path.exists(model_filename):
             logger.info("Loading saved weights")
-            self.model.load_state_dict(torch.load(model_filename, map_location=device))
+            self.model.load_state_dict(torch.load(model_filename, map_location=self.device))
         else:
             logger.info("No weights file found. Loading pre-trained weights.")
-        self.model.to(device)
+        self.model.to(self.device)
 
     def save(self, local_path, **kwargs):
         model_filename = os.path.join(local_path, self.configuration.get('model_filename', 'weights/best.pt'))
@@ -113,11 +113,11 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
     def predict(self, batch, **kwargs):
         # Reading configs:
         conf_threshold = self.configuration.get('conf_threshold', 0.5)
-        id_to_label_map = self.configuration['id_to_label_map']
+        id_to_label_map = self.model_entity.id_to_label_map
 
         self.model.eval()
         logger.info("Model set to evaluation mode")
-        results = self.model(torch.Tensor(batch))
+        results = self.model(torch.Tensor(batch).to(self.device))
         logger.info("Batch prediction finished")
         batch_annotations = list()
         logger.info("Creating annotations based on predictions")
@@ -135,11 +135,11 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
                     continue
                 cls = int(result['labels'][i_pred])
                 mask = result['masks'][i_pred].cpu().detach().numpy().squeeze()
-                logger.info(f"Class: {id_to_label_map[str(cls)]}, confidence: {score}")
+                logger.info(f"Class: {id_to_label_map[cls]}, confidence: {score}")
                 image_annotations.add(
                     annotation_definition=dl.Polygon.from_segmentation(
                         mask=mask,
-                        label=id_to_label_map[str(cls)]
+                        label=id_to_label_map[cls]
                         ),
                     model_info={'name': self.model_entity.name,
                                 'model_id': self.model_entity.id,
