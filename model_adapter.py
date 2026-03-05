@@ -82,17 +82,19 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
         return ims, tgs
 
     def load(self, local_path, **kwargs):
-        num_classes = len(self.model_entity.labels)
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         model_filename = os.path.join(local_path, self.configuration.get('model_filename', 'weights/best.pt'))
-
-        self.model = self.get_model_instance_segmentation(num_classes)
         os.makedirs(local_path, exist_ok=True)
+
         if os.path.exists(model_filename):
+            # NOTE: Number of classes is the maximum category ID plus one (for the zero-indexed labels)
+            num_classes = max(self.model_entity.id_to_label_map.keys()) + 1
+            self.model = self.get_model_instance_segmentation(num_classes=num_classes)
             logger.info("Loading saved weights")
             self.model.load_state_dict(torch.load(model_filename, map_location=self.device))
         else:
-            logger.info("No weights file found. Loading pre-trained weights.")
+            logger.info("No custom weights found. Using pretrained COCO model.")
+            self.model = torchvision.models.detection.maskrcnn_resnet50_fpn(weights="DEFAULT")
         self.model.to(self.device)
 
     def save(self, local_path, **kwargs):
@@ -104,24 +106,30 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
     def prepare_item_func(self, item: dl.entities.Item):
         img_size = self.configuration.get("input_size", 256)
         buffer = item.download(save_locally=False)
-        image = np.asarray(Image.open(buffer))
-        if image.shape[0] != 3:
-            image = np.transpose(image, (2, 0, 1))
-            image = np.resize(image, (3, img_size, img_size))
-        return image
+        image = Image.open(buffer).convert('RGB')
+        orig_w, orig_h = image.size
+        image = image.resize((img_size, img_size))
+        image = np.asarray(image, dtype=np.float32) / 255.0
+        image = np.transpose(image, (2, 0, 1))
+        return {'image': image, 'orig_shape': (orig_h, orig_w)}
 
     def predict(self, batch, **kwargs):
         # Reading configs:
         conf_threshold = self.configuration.get('conf_threshold', 0.5)
+        mask_threshold = self.configuration.get('mask_threshold', 0.5)
         id_to_label_map = self.model_entity.id_to_label_map
+
+        images = np.array([item['image'] for item in batch])
+        orig_shapes = [item['orig_shape'] for item in batch]
 
         self.model.eval()
         logger.info("Model set to evaluation mode")
-        results = self.model(torch.Tensor(batch).to(self.device))
+        results = self.model(torch.Tensor(images).to(self.device))
         logger.info("Batch prediction finished")
         batch_annotations = list()
         logger.info("Creating annotations based on predictions")
         for i_img, result in enumerate(results):
+            orig_h, orig_w = orig_shapes[i_img]
             logger.info(f"Annotations for item #{i_img}. Total number of detections: {len(result['labels'])}")
             image_annotations = dl.AnnotationCollection()
             for i_pred in range(len(result['labels'])):
@@ -131,20 +139,28 @@ class FasterRCNNAdapter(dl.BaseModelAdapter):
                     logger.info(
                         f"Ignoring detection, because its confidence ({score}) "
                         f"is lower than the threshold of {conf_threshold}"
-                        )
+                    )
                     continue
                 cls = int(result['labels'][i_pred])
+                label = id_to_label_map.get(cls, None)
+                if label is None:
+                    logger.warning(f"Class index {cls} not found in id_to_label_map, skipping")
+                    continue
                 mask = result['masks'][i_pred].cpu().detach().numpy().squeeze()
-                logger.info(f"Class: {id_to_label_map[cls]}, confidence: {score}")
+                mask = (mask > mask_threshold).astype(np.uint8)
+                mask = cv2.resize(mask, (orig_w, orig_h), interpolation=cv2.INTER_NEAREST)
+                logger.info(f"Class: {label}, confidence: {score}")
                 image_annotations.add(
                     annotation_definition=dl.Polygon.from_segmentation(
                         mask=mask,
-                        label=id_to_label_map[cls]
-                        ),
-                    model_info={'name': self.model_entity.name,
-                                'model_id': self.model_entity.id,
-                                'confidence': score}
-                    )
+                        label=label
+                    ),
+                    model_info={
+                        'name': self.model_entity.name,
+                        'model_id': self.model_entity.id,
+                        'confidence': score
+                    }
+                )
             batch_annotations.append(image_annotations)
         logger.info("Annotations created successfully")
         return batch_annotations
